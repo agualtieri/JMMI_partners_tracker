@@ -1,0 +1,195 @@
+## JMMI Partners Tracker
+## Yemen Data Team - 08-03-2020
+## V1
+
+rm(list=ls())
+
+library(stringr)
+library(zoo)
+library(openxlsx)
+library(data.table)
+library(dplyr)
+library(magrittr)
+library(tidyverse)
+library(formattable)
+library(reshape2)
+
+##############
+# Cleaning and Wrangling
+##############
+# For the server
+setwd("./Raw Data/")
+
+# Get a list of all files in that folder
+list_all<-(list.files())
+
+# Build a list to populate with the csv
+list_pull<-list()
+
+# Build a data tibble to populate with a select of the variables
+org_JMMI<-as_tibble(data.frame(test="TEST"))
+
+# Put all the csvs into one file together and work from there
+# https://stackoverflow.com/questions/5758084/loop-in-r-to-read-many-files
+
+for (k in 1:length(list_all)){
+  list_pull[[k]] <- read.csv(list_all[k])
+  # Make the JMMI label in the datasets for disaggregation later
+  name <-gsub(".csv","",unlist(strsplit(list_all[[k]]," "))[2])
+  list_pull[[k]]<-mutate(as_tibble(list_pull[[k]]), JMMI= name)
+  
+# Change from the _Alls to the nones from before, it should hold in the future.
+  # Occured during the tool combine
+  ifelse("select_one_organization_name_All" %in% colnames(list_pull[[k]]),
+         list_pull[[k]]<-dplyr::rename(list_pull[[k]], select_one_organisation_name = select_one_organization_name_All),
+         NA)
+  
+  ifelse("governorate_ID_All" %in% colnames(list_pull[[k]]),
+         list_pull[[k]]<-dplyr::rename(list_pull[[k]], governorate_ID = governorate_ID_All),
+         NA)
+  
+  ifelse("district_ID_All" %in% colnames(list_pull[[k]]),
+         list_pull[[k]]<-dplyr::rename(list_pull[[k]], district_ID = district_ID_All),
+         NA)
+}
+
+# Function to pull out names of orgs and districts and jmmi
+column_pull_org<-function(data){
+  colnames(data)<-gsub("_ALL", "", colnames(data))
+  df<-data%>%
+    dplyr::select("JMMI", ends_with("_ID", ignore.case = F),starts_with("select_one_"))
+    
+  org_JMMI<<-as_tibble(merge(df,org_JMMI,all=T))
+}
+
+# Use lapply to run the function we just made over our cleaned data in the list
+lapply(list_pull, column_pull_org)
+
+# Add the Pcodes
+# Substitute out the pcodes to standardize the name (taken from JMMI scripting, with csv (utf-8) sheet)
+this_script_path<-(dirname(rstudioapi::getActiveDocumentContext()$path))
+setwd(this_script_path)
+source("./other scripts/add_pcodes.R")
+org_JMMI<-add.pcodes(org_JMMI)
+
+# Order and delete columns
+org_JMMI<-org_JMMI[,c("JMMI","district_ID","governorate_ID","select_one_organisation_name","district_name","governorate_name")]
+org_JMMI<-dplyr::rename((org_JMMI), org = select_one_organisation_name)
+
+# Make the JMMI a date that we can sort and work with later
+org_JMMI$JMMI<-gsub("_"," ",org_JMMI$JMMI)
+org_JMMI$Date<-(as.Date(as.yearmon(org_JMMI$JMMI), format="%b-%Y"))
+                #org_JMMI$Date<-as.Date(org_JMMI$JMMI, format)
+
+# Ad variables for aggregation
+org_JMMI$org_num <- 1
+
+
+                                
+
+###############
+#Analysis
+###############
+#https://stackoverflow.com/questions/50953598/r-group-by-count-distinct-values-grouping-by-another-column
+
+#What are the splits North and South indicate here
+North<-c("YE14", #Al Bayda
+         "YE27", #Al Mahwit
+         "YE29", #Amran
+         "YE20", #Dhamar
+         "YE17", #Hajjah
+         "YE11", #Ibb
+         "YE31", #Raymah
+         "YE22", #Sa'ada
+         "YE23", #Sana'a
+         "YE13"  #Sana'a City
+) 
+
+North <- data.frame(North = North) 
+
+South<-c("YE12", #Abyan
+         "YE24", #Aden
+         "YE28", #Al Maharah
+         "YE19", #Hadramaut
+         "YE25", #Lahj
+         "YE21", #Shabwah
+         "YE32"  #Socotra
+)
+
+South <- data.frame(South = South)
+
+Contested<-c("YE30", #Al Dhale'e
+             "YE18", #Al Hudaydah
+             "YE16", #Al Jawf
+             "YE26", #Marib
+             "YE15"  #Taizz
+) 
+
+Contested <- data.frame(Contested = Contested)
+
+
+# Basic Counts
+# dt <- org_JMMI %>%
+      # group_by(Date, org) %>%
+               # dplyr::summarise(total_obs=dplyr::n(),dist_visited=dplyr::n_distinct(district_ID), gov_visisted=dplyr::n_distinct(governorate_ID))
+
+# Aggregation by district (to then filter by geographic area)
+#dt_gov <- org_JMMI %>% group_by(JMMI, governorate_ID) %>%
+                  #  dplyr::summarise(total_obs = dplyr::n(), dist_visited = n_distinct(district_ID), num_partners = n_distinct(org))
+
+# Add geographic ares as a column for filtering
+org_JMMI$geo <- ifelse(org_JMMI$governorate_ID %in% North$North, "North", 
+                      ifelse(org_JMMI$governorate_ID %in% South$South, "South", 
+                             ifelse(org_JMMI$governorate_ID %in% Contested$Contested,"Contested", NA)))
+
+# Add governorate names back
+#dt_gov$gov_name <- org_JMMI$governorate_name[match(dt_gov$governorate_ID, org_JMMI$governorate_ID)]
+
+
+# Filter by geographic areas
+dt_gov_north <- org_JMMI %>% filter(governorate_ID %in% North$North)
+
+dt_gov_south <- org_JMMI %>% filter(governorate_ID %in% South$South)
+
+dt_gov_cnt <- org_JMMI %>% filter(governorate_ID %in% Contested$Contested)
+
+
+
+## Save processed data
+write.csv(org_JMMI, paste0("./outputs/data_jmmi partners tracker_all_",Sys.Date(),".csv"))
+write.csv(dt_gov_cnt, paste0("./outputs/data_jmmi partners tracker_contested_",Sys.Date(),".csv"))
+write.csv(dt_gov_north, paste0("./outputs/data_jmmi partners tracker_north_", Sys.Date(),".csv"))
+write.csv(dt_gov_south, paste0("./outputs/data_jmmi partners tracker_south_",Sys.Date(),".csv"))
+
+
+### Table with list of partners by month
+org_JMMI$ngo_name <- "ngo_name"
+
+list_org <- org_JMMI %>% select("Date", "org", "geo") %>% unique()
+
+list_org_final <- list_org %>% dcast(Date+geo~org, value.var = "org")
+
+
+
+######
+list_org <- org_JMMI %>% group_by(Date) %>% group_map(~unique(.x$org))
+
+### Load empty dataset
+ong_df <- read.xlsx("./empty_dataset.xlsx")
+
+
+
+
+test <- bind_rows(lapply(list_org, as.data.frame.list))
+
+ong_df <- 
+
+
+
+list_org2 <- data.frame(matrix(unlist(list_org), nrow=length(list_org), byrow = T))
+
+do.call(rbind.data.frame, list_org)
+
+
+
+

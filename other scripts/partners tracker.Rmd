@@ -1,0 +1,69 @@
+---
+title: "Monthly JMMI Partners Tracker"
+author: "alberto.gualtieri@reach-initiative.org"
+date: "3/1/2020"
+output: html_document
+---
+<style>
+  .col2 {
+    columns: 2 200px;         /* number of columns and width in pixels*/
+    -webkit-columns: 2 200px; /* chrome, safari */
+    -moz-columns: 2 200px;    /* firefox */
+  }
+  .col3 {
+    columns: 3 100px;
+    -webkit-columns: 3 100px;
+    -moz-columns: 3 100px;
+  }
+</style>
+
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE, cache = FALSE,comment = NA, message = FALSE, warning=FALSE, fig.align = 'center' )
+```
+
+<center> Monthly JMMI Partners Tracker - `r date()` </center>
+
+
+```{r, include=FALSE}
+require(tidyverse)
+library(knitr)
+library(kableExtra)
+library(lubridate)
+library(gsubfn)
+library(formattable)
+library(DT)
+library(zoo)
+library(flexdashboard)
+
+
+## Load files <- only bit that needs to be updated
+dt_gov <- read.csv("./outputs/data_jmmi partners tracker_all_2020-03-01.csv", stringsAsFactors = F)
+dt_gov$X <- NULL
+
+```
+# {.tabset}
+
+## Overall Monthly Tracking
+<centre> **General Monthly Analysis - not disaggregated**
+
+<div class="col2">
+
+```{r eval=TRUE, echo=FALSE, results='asis'}
+data_gov <- dt_gov %>% 
+            dplyr::select(-c("governorate_ID", "gov_name", "geo")) %>%
+            plyr::rename(c("total_obs" = "Total Observations", 
+                           "dist_visited" = "Number of Districts", 
+                           "num_partners" = "Number of Partners")) %>%
+            group_by(JMMI) %>%
+            summarise_all(funs(sum))
+
+kable(data_gov)%>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),fixed_thead = T, full_width = F)
+
+```
+```{r eval=TRUE, echo=FALSE, results='asis'}
+
+
+
+```

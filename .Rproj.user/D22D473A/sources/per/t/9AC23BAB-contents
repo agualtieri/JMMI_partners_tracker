@@ -1,0 +1,272 @@
+rm(list=ls())
+
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(plyr)
+library(purrr)
+library(lubridate)
+library(tidyselect)
+library(qpcR)
+library(stringr)
+library(reachR)
+library(zoo)
+library(googlesheets)
+library(openxlsx)
+library(writexl)
+
+library(shiny)
+library(shinydashboard)
+#library(dashboardthemes)
+
+library(devtools)
+library(rgdal)
+library(googlesheets)
+library(googlesheets4)
+library(googledrive)
+library(koboloadeR)
+library(koboquest)
+library(kobostandards)
+library(ggplot2)
+library(DT)
+library(data.table)
+library(dplyr)
+library(httr)
+library(magrittr)
+library(tidyverse)
+library(formattable)
+
+##############
+#Cleaning and Wrangling
+##############
+#for the server
+#for the dropbox
+setwd("C:/Users/REACH_AO_YEMEN/Dropbox/REACH/YEM/YEM Assessment/YEM Cash and Markets/02_JMMI/Raw Data")
+#get a list of all files in that folder
+list_all<-(list.files())
+#build a list to populate with the csv
+list_pull<-list()
+#build a data tibble to populate with a select of the variables
+org_JMMI<-as_tibble(data.frame(test="TEST"))
+
+#https://stackoverflow.com/questions/5758084/loop-in-r-to-read-many-files
+#put all the csvs into one file together and work from there
+for (k in 1:length(list_all)){
+  list_pull[[k]] <- read.csv(list_all[k])
+  #make the JMMI label in the datasets for disaggregation later
+  name<-gsub(".csv","",unlist(strsplit(list_all[[k]]," "))[2])
+  list_pull[[k]]<-mutate(as_tibble(list_pull[[k]]), JMMI= name)
+  
+#change from the _Alls to the nones from before, it should hold in the future.
+  #occured during the tool combine
+  ifelse("select_one_organization_name_All" %in% colnames(list_pull[[k]]),
+         list_pull[[k]]<-dplyr::rename(list_pull[[k]], select_one_organisation_name = select_one_organization_name_All),
+         NA)
+  
+  ifelse("governorate_ID_All" %in% colnames(list_pull[[k]]),
+         list_pull[[k]]<-dplyr::rename(list_pull[[k]], governorate_ID = governorate_ID_All),
+         NA)
+  
+  ifelse("district_ID_All" %in% colnames(list_pull[[k]]),
+         list_pull[[k]]<-dplyr::rename(list_pull[[k]], district_ID = district_ID_All),
+         NA)
+}
+
+#function to pull out names of orgs and districts and jmmi
+column_pull_org<-function(data){
+  colnames(data)<-gsub("_ALL", "", colnames(data))
+  df<-data%>%
+    dplyr::select("JMMI", ends_with("_ID", ignore.case = F),starts_with("select_one_"))
+    
+  org_JMMI<<-as_tibble(merge(df,org_JMMI,all=T))
+}
+
+#use lapply to run the function we just made over our cleaned data in the list
+lapply(list_pull,column_pull_org)
+
+#add the Pcodes
+#substitute out the pcodes to standardize the name (taken from JMMI scripting, with csv (utf-8) sheet)
+this_script_path<-(dirname(rstudioapi::getActiveDocumentContext()$path))
+setwd(this_script_path)
+source("./other scripts/add_pcodes.R")
+org_JMMI<-add.pcodes(org_JMMI)
+
+#order and delete columns
+org_JMMI<-org_JMMI[,c("JMMI","district_ID","governorate_ID","select_one_organisation_name","district_name","governorate_name")]
+org_JMMI<-dplyr::rename((org_JMMI), org = select_one_organisation_name)
+
+#make the JMMI a date that we can sort and work with later
+org_JMMI$JMMI<-gsub("_"," ",org_JMMI$JMMI)
+org_JMMI$Date<-(as.Date(as.yearmon(org_JMMI$JMMI), format="%b-%Y"))
+                #org_JMMI$Date<-as.Date(org_JMMI$JMMI, format)
+                                
+
+###############
+#Analysis
+###############
+#https://stackoverflow.com/questions/50953598/r-group-by-count-distinct-values-grouping-by-another-column
+
+#Basic Counts
+counts_by_org_per_JMMI<-org_JMMI%>%
+  group_by(Date, org)%>%
+  dplyr::summarise(total_obs=dplyr::n(),dist_visited=dplyr::n_distinct(district_ID), gov_visisted=dplyr::n_distinct(governorate_ID))
+  
+#What are the splits North and South indicate here
+North<-c("YE14",#Al Bayda
+         "YE27",#Al Mahwit
+         "YE29",#Amran
+         "YE20",#Dhamar
+         "YE17",#Hajjah
+         "YE11",#Ibb
+         "YE31",#Raymah
+         "YE22",#Sa'ada
+         "YE23",#Sana'a
+         "YE13"#Sana'a City
+         )
+South<-c("YE12",#Abyan
+         "YE24",#Aden
+         "YE28",#Al Maharah
+         "YE19",#Hadramaut
+         "YE25",#Lahj
+         "YE21",#Shabwah
+         "YE32"#Socotra
+         )
+Contested<-c("YE30",#Al Dhale'e
+             "YE18",#Al Hudaydah
+             "YE16",#Al Jawf
+             "YE26",#Marib
+             "YE15"#Taizz
+             )
+
+#North Splits
+org_JMMI_North<-org_JMMI%>%
+  filter(governorate_ID %in% North)
+
+org_JMMI_North_Count<-org_JMMI_North%>%
+  group_by(Date, org)%>%
+  dplyr::summarise(total_obs=dplyr::n(),dist_visited=dplyr::n_distinct(district_ID), gov_visisted=dplyr::n_distinct(governorate_ID))
+
+org_test<-filter(org_JMMI_North,org=="SCI")
+org_JMMI_North_Matrix<-org_test%>%
+  dplyr::mutate(area = paste0(governorate_name,"-",district_name))%>%
+  group_by(Date,area, org)%>%
+  dplyr::summarise(total_obs=dplyr::n())%>%
+  dplyr::select(-org)%>%
+  spread(area,total_obs)
+  
+
+orgs_North<-as.vector(unique(org_JMMI_North$org))
+govs_North<-as.vector(unique(org_JMMI_North$governorate_name))
+#South Splits
+org_JMMI_South<-org_JMMI%>%
+  filter(governorate_ID %in% South)
+orgs_South<-as.vector(unique(org_JMMI_South$org))
+#Contested Splits
+org_JMMI_Contested<-org_JMMI%>%
+  filter(governorate_ID %in% Contested)
+orgs_Contested<-as.vector(unique(org_JMMI_Contested$org))
+
+###########
+#Build Dashboard
+###########
+ui <-  fluidPage(
+  #theme = ".small-box.bg-yellow { background-color: #FFFF00 !important; color: #000000 !important; }",
+  
+  titlePanel("JMMI Partner Coverage Sheet"),
+  #includeCSS("AdminLTE.css"),
+  #includeCSS("shinydashboard.css"),
+  # Create a new Row in the UI for selectInputs
+    # Create a new row for the table.
+    mainPanel(
+      selectInput("Organization",
+                  "Organization:",
+                  c("All",
+                    sort(unique(as.character(org_JMMI$org))))),
+      
+      #https://stackoverflow.com/questions/42532879/r-shiny-layout-side-by-side-chart-and-or-table-within-a-tab
+      
+        id = 'data',
+        tabPanel(h4("Districts"),
+                column(12,
+                       h3("North Districts"),
+                       DT::dataTableOutput("North_Table")
+                ),
+                column(12,
+                       h3("South Districts"),
+                       DT::dataTableOutput("South_Table")
+                ),
+                column(12,
+                       h3("Contested Districts"),
+                       DT::dataTableOutput("Contested_Table")
+                ),
+        ),
+        
+        )
+    
+)
+
+
+# Define server logic required to draw a histogram
+server <- function(input, output) {
+  
+  output$partner_sum <-DT::renderDataTable(DT::datatable({
+    data<-partner_summary
+    data
+  }))
+  
+  output$North_Table <- DT::renderDataTable(DT::datatable({
+    data <- org_JMMI_North
+    if (input$Organization != "All") {
+      data <- data[data$org == input$Organization,]
+      data<-data%>%
+        dplyr::mutate(area = paste0(governorate_name,"-",district_name))%>%
+        group_by(Date,area, org)%>%
+        dplyr::summarise(total_obs=dplyr::n())%>%
+        dplyr::select(-org)%>%
+        spread(area,total_obs)
+      
+    }
+    data
+  }))
+  
+  output$South_Table <- DT::renderDataTable(DT::datatable({
+    data <- org_JMMI_South
+    if (input$Organization != "All") {
+      data <- data[data$org == input$Organization,]
+      data<-data%>%
+        dplyr::mutate(area = paste0(governorate_name,"-",district_name))%>%
+        group_by(Date,area, org)%>%
+        dplyr::summarise(total_obs=dplyr::n())%>%
+        dplyr::select(-org)%>%
+        spread(area,total_obs)
+    
+    }
+    data
+  }))
+  
+  output$Contested_Table <- DT::renderDataTable(DT::datatable({
+    data <- org_JMMI_Contested
+    if (input$Organization != "All") {
+      data <- data[data$org == input$Organization,]
+      data<-data%>%
+        dplyr::mutate(area = paste0(governorate_name,"-",district_name))%>%
+        group_by(Date,area, org)%>%
+        dplyr::summarise(total_obs=dplyr::n())%>%
+        dplyr::select(-org)%>%
+        spread(area,total_obs)
+      
+    }
+    data
+  }))
+  
+}
+# Run the application 
+shinyApp(ui = ui, server = server)
+
+
+#############
+#Export
+#############
+setwd("C:/Users/REACH_AO_YEMEN/Dropbox/REACH/YEM/YEM Assessment/YEM Cash and Markets/02_JMMI/Partner Tracker Output")
+title_Final <- paste0("./Partner_Tracker_Update-",Sys.Date(),".xlsx")
+write_xlsx(counts_by_org_per_JMMI,title_Final)

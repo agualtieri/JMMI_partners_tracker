@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1584361841485.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3797849352",
+    "id" : "D0E62599",
+    "lastKnownWriteTime" : 1584363090,
+    "last_content_update" : 1584363090727,
+    "path" : "C:/Users/REACH_AO_YEMEN/Desktop/OFDA_Tracker/Base Tracker Code.R",
+    "project_path" : "Base Tracker Code.R",
+    "properties" : {
+        "cursorPosition" : "177,43",
+        "scrollLine" : "152"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
