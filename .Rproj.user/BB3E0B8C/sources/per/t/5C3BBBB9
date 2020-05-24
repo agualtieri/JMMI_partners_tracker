@@ -1,0 +1,27 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1587542335816.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "62317242",
+    "id" : "5C3BBBB9",
+    "lastKnownWriteTime" : 1587542448,
+    "last_content_update" : 1587542449002,
+    "path" : "~/REACH Yemen/2. Cash & Markets/7. JMMI_partners_tracker/partners tracker_v2.Rmd",
+    "project_path" : "partners tracker_v2.Rmd",
+    "properties" : {
+        "cursorPosition" : "6,18",
+        "last_setup_crc32" : "",
+        "scrollLine" : "0",
+        "tempName" : "Untitled1"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

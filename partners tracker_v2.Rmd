@@ -5,7 +5,7 @@ output:
     orientation: columns
     source_code: embed
     theme: journal
-    logo: C:/Users/REACH_AO_YEMEN/Desktop/OFDA_Tracker/logo/Asset 1.png
+    logo: C:/Users/REACH_AO_YEMEN\Documents/REACH Yemen/2. Cash & Markets/7. JMMI_partners_tracker/logo/Asset1.png
     output: html_document
 
 ---
@@ -22,7 +22,7 @@ library(dplyr)
 
 
 ## Load files <- only bit that needs to be updated
-dt_gov <- read.csv("outputs/data_jmmi partners tracker_all_2020-03-24.csv", stringsAsFactors = F)
+dt_gov <- read.csv("outputs/data_jmmi partners tracker_all_2020-04-22.csv", stringsAsFactors = F)
 dt_gov$X <- NULL
 
 dt_gov$Date <- as.yearmon(dt_gov$JMMI)
